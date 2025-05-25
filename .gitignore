@@ -1,0 +1,3 @@
+__pycache__/
+dataset/videos/*.mp4
+DS_Store
