@@ -1,16 +1,18 @@
+import torch
 from torchcodec.decoders import VideoDecoder
-import matplotlib.pyplot as plt
-from backbone.resnet50.aptos_dataset import get_resnet50_transform
 
-vc = VideoDecoder("dataset/videos/case_0272.mp4")
+vc = VideoDecoder("dataset/videos/case_0994.mp4")
 
 print(vc.metadata)
 
+batch = []
 # plot the first frame
+for i in range(2000, 3000, 1):
+    batch.append(vc[i])
 
-sample = vc[2000]
-transform = get_resnet50_transform()
-sample = transform(sample)
-print(sample.shape)
-plt.imshow(sample.permute(1, 2, 0))
-plt.show()
+# sample = batch_transform(torch.stack(batch))
+torch_batch = torch.stack(batch)
+
+print(torch_batch.shape)
+# plt.imshow(torch_batch[900].permute(1, 2, 0).cpu().numpy() / 255)
+# plt.show()

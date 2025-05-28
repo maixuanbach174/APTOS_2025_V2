@@ -1,6 +1,6 @@
-import csv
-import glob
 import os
+import glob
+import csv
 from typing import Iterator, Tuple
 
 import torch
@@ -8,65 +8,76 @@ from torch.utils.data import IterableDataset
 from torchcodec.decoders import VideoDecoder
 import torchvision.transforms as T
 
+
 def get_resnet50_transform() -> T.Compose:
     """Returns the standard ImageNet preprocessing pipeline for ResNet-50."""
     return T.Compose([
-        T.ConvertImageDtype(torch.float),  # convert uint8 [0,255] to float [0.0,1.0]
+        T.ConvertImageDtype(torch.float),  # uint8 [0,255] → float [0,1]
         T.Resize(256, interpolation=T.InterpolationMode.BILINEAR),
         T.CenterCrop(224),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        T.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]),
     ])
 
 
 class AptosDataset(IterableDataset):
     """
-    An iterable dataset that yields batches of frames directly from videos.
-    Uses torchcodec's VideoDecoder for efficient batch decoding.
+    Iterable dataset yielding batches of (frames, labels, timestamps) from videos,
+    filtered by train/val split in the CSV annotation file.
     """
-    def __init__(self, video_dir: str, annotations_file: str, transform=get_resnet50_transform(), batch_size: int = 32):
-        """
-        Args:
-            video_dir (str): Directory containing video files
-            annotations_file (str): Path to annotations CSV file
-            transform (callable, optional): Optional transform to be applied on frames
-            batch_size (int): Size of frame batches to return
-        """
+    def __init__(
+        self,
+        video_dir: str,
+        annotations_file: str,
+        split: str = 'train',
+        transform: T.Compose = get_resnet50_transform(),
+        batch_size: int = 32,
+    ):
+        super().__init__()
         self.video_dir = video_dir
         self.transform = transform
         self.batch_size = batch_size
-        
-        # Collect all mp4 files in directory
-        self.video_files = sorted(glob.glob(os.path.join(video_dir, "*.mp4")))
-        if not self.video_files:
-            raise ValueError(f"No .mp4 files found in {video_dir}")
-        
+        self.split = split.lower()
+
+        # Read annotations, filtering by split
         self.annotations = {}  # video_id -> list of (start, end, phase_id)
         with open(annotations_file, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
+                if row.get('split', '').lower() != self.split:
+                    continue
                 vid = row['video_id']
                 start = float(row['start'])
                 end = float(row['end'])
                 phase = row['phase_id']
                 self.annotations.setdefault(vid, []).append((start, end, phase))
-        
-        self.video_id = self.video_files[0].split("/")[-1].split(".")[0]
-        
-        # Initialize pointers
+
+        # Gather video files that have annotations in this split
+        all_mp4 = sorted(glob.glob(os.path.join(video_dir, '*.mp4')))
+        self.video_files = []
+        for path in all_mp4:
+            vid = os.path.splitext(os.path.basename(path))[0]
+            if vid in self.annotations:
+                self.video_files.append(path)
+        if not self.video_files:
+            raise ValueError(f"No .mp4 files found for split='{self.split}' in {video_dir}")
+
+        # Initialize first video reader
         self.current_video_idx = 0
         self.current_reader = VideoDecoder(self.video_files[0])
         self.current_frame_idx = 0
 
     def _load_next_video(self) -> None:
-        """Load the next video in the sequence."""
-        self.current_video_idx = (self.current_video_idx + 1) % len(self.video_files)
-        next_path = self.video_files[self.current_video_idx]
-        self.video_id = next_path.split("/")[-1].split(".")[0]
-        self.current_reader = VideoDecoder(next_path)
+        """Advance to the next video in the split and reset frame index."""
+        self.current_video_idx += 1
+        if self.current_video_idx >= len(self.video_files):
+            raise StopIteration
+        path = self.video_files[self.current_video_idx]
+        self.current_reader = VideoDecoder(path)
         self.current_frame_idx = 0
 
     def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        """Returns an iterator that yields batches of (frames, labels, timestamps)."""
+        # Reset for new epoch
         self.current_video_idx = 0
         self.current_reader = VideoDecoder(self.video_files[0])
         self.current_frame_idx = 0
@@ -74,52 +85,40 @@ class AptosDataset(IterableDataset):
 
     def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Returns a batch of (frames, labels, timestamps)."""
-        frames = []
-        labels = []
-        timestamps = []
-        
+        frames, labels, timestamps = [], [], []
         while len(frames) < self.batch_size:
-            # Check if we need to move to next video
+            # If current video exhausted, move on
             if self.current_frame_idx >= self.current_reader.metadata.num_frames:
-                if self.current_video_idx >= len(self.video_files) - 1:
-                    if not frames:  # If we haven't collected any frames, stop iteration
-                        raise StopIteration
-                    break  # If we have some frames, return them as a partial batch
                 self._load_next_video()
-            
-            # Get a batch of frames from current position
+
+            # Determine indices for this batch chunk
             remaining = self.batch_size - len(frames)
             end_idx = min(self.current_frame_idx + remaining, self.current_reader.metadata.num_frames)
             indices = list(range(self.current_frame_idx, end_idx))
-            
-            # Decode batch of frames
-            frame_objs = self.current_reader.get_frames_at(indices=indices)
-            
-            # Process each frame in the batch
-            for frame_obj in frame_objs:
-                frame = frame_obj.data
-                timestamp = float(frame_obj.pts_seconds)
-                
-                # Find label for this timestamp
+
+            # Decode frames in one go
+            frame_objs = self.current_reader.get_frames_at(indices)
+
+            for obj in frame_objs:
+                frame = obj.data
+                ts = float(obj.pts_seconds)
+                # Lookup label
                 label = None
-                for start, end, phase in self.annotations.get(self.video_id, []):
-                    if start <= timestamp < end:
-                        label = phase
+                vid = os.path.splitext(os.path.basename(self.video_files[self.current_video_idx]))[0]
+                for s, e, p in self.annotations.get(vid, []):
+                    if s <= ts < e:
+                        label = p
                         break
-                
-                if label is not None:  # Only add frames that have labels
+                if label is not None:
                     if self.transform:
                         frame = self.transform(frame)
                     frames.append(frame)
                     labels.append(int(label))
-                    timestamps.append(timestamp)
-            
+                    timestamps.append(ts)
             self.current_frame_idx = end_idx
-        
-        # Stack the collected frames into a batch
+
+        # Stack and return batch
         frames_batch = torch.stack(frames)
         labels_batch = torch.tensor(labels, dtype=torch.long)
-        # timestamps_batch = torch.tensor(timestamps, dtype=torch.float)
-
-        # return frames_batch, labels_batch, timestamps_batch
-        return frames_batch, labels_batch, timestamps
+        timestamps_batch = torch.tensor(timestamps)
+        return frames_batch, labels_batch, timestamps_batch
