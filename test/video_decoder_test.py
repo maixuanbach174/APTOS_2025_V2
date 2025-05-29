@@ -1,18 +1,23 @@
 import torch
 from torchcodec.decoders import VideoDecoder
+import matplotlib.pyplot as plt
 
 vc = VideoDecoder("dataset/videos/case_0994.mp4")
+frame = []
+for i in range(2000, 2010, 1):
+    frame.append(vc[i])
 
 print(vc.metadata)
+timestamps = vc.metadata.seconds
 
-batch = []
-# plot the first frame
-for i in range(2000, 3000, 1):
-    batch.append(vc[i])
+# Create a figure with 2x5 subplots
+fig, axes = plt.subplots(2, 5, figsize=(20, 8))
+axes = axes.ravel()
 
-# sample = batch_transform(torch.stack(batch))
-torch_batch = torch.stack(batch)
+# Plot each sample in the batch
+for i in range(10):
+    axes[i].imshow(frame[i].permute(1, 2, 0))
+    axes[i].axis('off')
 
-print(torch_batch.shape)
-# plt.imshow(torch_batch[900].permute(1, 2, 0).cpu().numpy() / 255)
-# plt.show()
+plt.tight_layout()
+plt.show()
