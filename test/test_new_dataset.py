@@ -12,13 +12,13 @@ def main():
     dataset = AptosIterableDataset("dataset/videos", "dataset/annotations/APTOS_train-val_annotation.csv", split="train", shuffle_videos=True)
     data_loader = DataLoader(dataset, batch_size=10, num_workers=4, worker_init_fn=worker_init_fn)
 
-    # skip_batch = 100
+    skip_batch = 100
 
     data_loader = iter(data_loader)
 
-    # for i in range(skip_batch):
-    #     print(i)
-    #     next(data_loader)
+    for i in range(skip_batch):
+        print(i)
+        next(data_loader)
 
     # Get one batch of data
     frame, label, timestamp = next(data_loader)
