@@ -1,4 +1,4 @@
 __pycache__/
 dataset/videos/*.mp4
-dataset/train_images/*.jpg
+dataset/images/*
 DS_Store

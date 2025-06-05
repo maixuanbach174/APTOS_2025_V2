@@ -15,13 +15,9 @@ from torchcodec.decoders import VideoDecoder
 
 ANNOT_CSV        = "dataset/annotations/APTOS_train-val_annotation.csv"
 VIDEO_DIR        = "dataset/videos"
-PHASE_QUOTA_CSV  = "dataset/annotations/phase_quota_config.csv"   # output from the previous step
-OUTPUT_IMG_DIR   = "dataset/train_images"            # root directory to save images
-SAMPLES_CSV      = "dataset/annotations/samples_mapping.csv"      # output samples mapping file
+PHASE_QUOTA_CSV  = "dataset/annotations/val_phase_quota_config.csv"   # output from the previous step
+SAMPLES_CSV      = "dataset/annotations/val_samples_mapping.csv"      # output samples mapping file
 BUFFER_FRAMES    = 2  # Số frame buffer ở đầu và cuối mỗi segment cho medium/popular
-
-# Ensure the top‐level output directory exists
-os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
 
 # ───────────────────────────────────────────────
 # STEP 1: LOAD QUOTAS PER PHASE
@@ -45,7 +41,7 @@ with open(ANNOT_CSV, newline="") as f:
     for row in reader:
         if row["video_id"] not in video_ids:
             continue
-        if row.get("split", "").lower() != "train":
+        if row.get("split", "").lower() != "val":
             continue
         vid = row["video_id"]
         phase = int(row["phase_id"])
@@ -157,7 +153,3 @@ with open(SAMPLES_CSV, "w", newline="") as f:
         writer.writerow(sample)
 
 print(f"Saved {len(all_samples)} samples to {SAMPLES_CSV}")
-
-# Save metadata
-with open(os.path.join(OUTPUT_IMG_DIR, "metadata.json"), "w") as f:
-    json.dump(video_meta, f)
