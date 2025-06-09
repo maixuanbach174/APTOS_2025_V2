@@ -1,7 +1,7 @@
 __pycache__/
 dataset/videos/*.mp4
 dataset/images/*
-DS_Store
+.DS_Store
 dataset/image_storage/*
 visualize/graphs/*
 visualize/results/*
