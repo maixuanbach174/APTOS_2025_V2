@@ -2,3 +2,8 @@ __pycache__/
 dataset/videos/*.mp4
 dataset/images/*
 DS_Store
+dataset/image_storage/*
+visualize/graphs/*
+visualize/results/*
+plots/*
+backbone/resnet50_v2/models/*

@@ -20,19 +20,6 @@ def get_resnet50_transform() -> T.Compose:
                     std=[0.229, 0.224, 0.225]),
     ])
 
-import os
-import glob
-import csv
-import random
-import numpy as np
-from typing import Iterator, Tuple, Optional
-
-import torch
-from torch.utils.data import IterableDataset, get_worker_info
-from torchcodec.decoders import VideoDecoder
-import torchvision.transforms as T
-
-
 def get_resnet50_transform() -> T.Compose:
     """Returns the standard ImageNet preprocessing pipeline for ResNet-50."""
     return T.Compose([
