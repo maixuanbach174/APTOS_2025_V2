@@ -7,3 +7,7 @@ visualize/graphs/*
 visualize/results/*
 plots/*
 backbone/resnet50_v2/models/*
+
+phase_recognition/models/*
+visualizations/*
+dataset/features/*

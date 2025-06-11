@@ -253,9 +253,9 @@ def main():
     NUM_CLASSES = 35
     BATCH_SIZE = 32
     NUM_WORKERS = 4
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 2
     PATIENCE = 3
-    CKPT_PATH = "backbone/resnet50_v2/models/bresnet50_best_v2.pth"
+    CKPT_PATH = "backbone/resnet50_v2/models/resnet50_finetune.pth"
 
     device = setup_device()
     train_loader, val_loader = setup_datasets_and_loaders(
